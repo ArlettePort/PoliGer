@@ -10,7 +10,7 @@ import { useCallback, useMemo } from 'react';
 
 export default function PerfilLayout() {
   const { colors: themeColors } = useTheme();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { canViewPolinizaciones, canViewGerminaciones, isAdmin } = usePermissions();
   const router = useRouter();
   const segments = useSegments();
@@ -55,8 +55,8 @@ export default function PerfilLayout() {
   }, [router]);
 
   const handleLogout = useCallback(async () => {
-    // Logout will be handled in child components
-  }, []);
+    await logout();
+  }, [logout]);
 
   return (
     <ResponsiveLayout>
