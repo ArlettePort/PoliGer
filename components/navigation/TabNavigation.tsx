@@ -135,12 +135,12 @@ const createStyles = (colors: ReturnType<typeof import('@/utils/colors').getColo
   },
   tabsContainer: {
     flex: 1,
-    paddingTop: 20,
-    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingHorizontal: 12,
   },
   footer: {
-    paddingVertical: 20,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderTopWidth: 1,
     borderTopColor: colors.border.default,
     alignItems: 'center',
@@ -164,14 +164,14 @@ const createStyles = (colors: ReturnType<typeof import('@/utils/colors').getColo
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: 6,
     backgroundColor: 'transparent',
   },
   tabCollapsed: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     justifyContent: 'center',
   },
   activeTab: {
@@ -190,9 +190,9 @@ const createStyles = (colors: ReturnType<typeof import('@/utils/colors').getColo
     elevation: 3,
   },
   tabText: {
-    fontSize: 15,
+    fontSize: 13,
     color: colors.text.tertiary,
-    marginLeft: 12,
+    marginLeft: 8,
     fontWeight: '500',
     flex: 1,
   },

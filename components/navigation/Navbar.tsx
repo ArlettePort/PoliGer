@@ -44,6 +44,9 @@ export function Navbar() {
           style={styles.logo}
           resizeMode="contain"
         />
+        <Text style={[styles.logoText, { color: themeColors.text.primary }]}>
+          Poliger Ecuagenera
+        </Text>
       </View>
 
       {/* Right side icons */}
@@ -151,12 +154,18 @@ const createStyles = (
     flex: 1,
   },
   logoContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   logo: {
     height: 40,
-    width: 150,
+    width: 40,
+  },
+  logoText: {
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   iconsContainer: {
     flexDirection: 'row',

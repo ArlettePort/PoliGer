@@ -1,9 +1,172 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { reentrenamientoService, type ModeloReentrenamiento, type ConteosReentrenamiento } from '@/services/reentrenamiento.service';
+import { logger } from '@/services/logger';
+
+// Mensajes de error seguros para mostrar al usuario
+const getErrorMessage = (error: any): string => {
+  // No exponemos mensajes del servidor directamente
+  if (error.response?.status === 403) {
+    return 'No tienes permiso para realizar esta acción';
+  }
+  if (error.response?.status === 400) {
+    return 'Datos inválidos. Intenta nuevamente.';
+  }
+  if (error.response?.status === 503) {
+    return 'El servicio no está disponible. Intenta más tarde.';
+  }
+  if (error.response?.status >= 500) {
+    logger.error('Error del servidor', error);
+    return 'Ocurrió un error en el servidor. Por favor intenta más tarde.';
+  }
+  if (error.message?.includes('timeout')) {
+    return 'La solicitud tardó demasiado tiempo. Intenta nuevamente.';
+  }
+  // Fallback seguro
+  return 'Ocurrió un error desconocido. Por favor intenta nuevamente.';
+};
+
+// Validar modelo
+const isValidModel = (modelo: unknown): modelo is ModeloReentrenamiento => {
+  return modelo === 'polinizacion' || modelo === 'germinacion' || modelo === 'ambos';
+};
+
+// Componente de tarjeta memorizador para optimizar renders
+interface ModelCardProps {
+  modelKey: 'polinizacion' | 'germinacion';
+  label: string;
+  badge: string;
+  gradientColors: [string, string];
+  accentColor: string;
+  count: number;
+  minimo: number;
+  isReady: boolean;
+  isLoading: boolean;
+  isButtonEnabled: boolean;
+  conteosLoading: boolean;
+  conteosError: boolean;
+  onReentrenar: (modelo: 'polinizacion' | 'germinacion') => void;
+  colors: any;
+  styles: any;
+}
+
+const ModelCard = memo<ModelCardProps>(({
+  modelKey,
+  label,
+  badge,
+  gradientColors,
+  accentColor,
+  count,
+  minimo,
+  isReady,
+  isLoading,
+  isButtonEnabled,
+  conteosLoading,
+  conteosError,
+  onReentrenar,
+  colors,
+  styles: s,
+}) => {
+  const progreso = useMemo(() => Math.min((count / minimo) * 100, 100), [count, minimo]);
+  const statusText = useMemo(() => {
+    if (conteosLoading) return 'Cargando...';
+    if (conteosError) return 'No se pudo cargar';
+    if (isReady) return 'Listo para reentrenar';
+    return `Faltan ${(minimo - count).toLocaleString()} registros para habilitar el reentrenamiento`;
+  }, [conteosLoading, conteosError, isReady, count, minimo]);
+
+  const successColor = colors.status.success;
+
+  return (
+    <View style={s.card}>
+      <LinearGradient colors={gradientColors} style={s.cardHeader}>
+        <View style={s.badgeContainer}>
+          <Text style={s.badgeText}>{badge}</Text>
+        </View>
+        <View style={s.cardTitleRow}>
+          {modelKey === 'polinizacion' ? (
+            <Ionicons name="flower-outline" size={17} color="rgba(255,255,255,0.85)" style={s.cardIcon} />
+          ) : (
+            <FontAwesome6 name="seedling" size={15} color="rgba(255,255,255,0.85)" style={s.cardIcon} />
+          )}
+          <Text style={s.cardTitle}>{label}</Text>
+        </View>
+      </LinearGradient>
+
+      <View style={s.cardBody}>
+        <Text style={s.registrosLabel}>REGISTROS FINALIZADOS</Text>
+
+        <View style={s.countRow}>
+          {conteosLoading ? (
+            <ActivityIndicator size="small" color={accentColor} />
+          ) : conteosError ? (
+            <Text style={[s.countCurrent, { color: colors.status.error, fontSize: 22 }]}>—</Text>
+          ) : (
+            <Text>
+              <Text style={[s.countCurrent, { color: accentColor }]}>
+                {count.toLocaleString()}
+              </Text>
+              <Text style={s.countTotal}> / {minimo.toLocaleString()}</Text>
+            </Text>
+          )}
+        </View>
+
+        <View style={s.progressTrack}>
+          <View
+            style={[
+              s.progressFill,
+              { width: `${progreso}%` as any, backgroundColor: accentColor },
+            ]}
+          />
+        </View>
+        <Text style={[s.progressPct, { color: accentColor }]}>
+          {!conteosLoading && !conteosError ? `${progreso.toFixed(1)}%` : ''}
+        </Text>
+
+        <View style={s.statusRow}>
+          {!conteosLoading && !conteosError && (
+            <Ionicons
+              name={isReady ? 'checkmark-circle' : 'information-circle-outline'}
+              size={12}
+              color={isReady ? successColor : colors.text.disabled}
+              style={{ marginRight: 4, marginTop: 1 }}
+            />
+          )}
+          <Text style={[s.statusText, isReady && { color: successColor }]}>
+            {statusText}
+          </Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={[
+          s.cardButton,
+          isButtonEnabled
+            ? { backgroundColor: accentColor, borderColor: accentColor }
+            : s.cardButtonDisabled,
+        ]}
+        onPress={() => onReentrenar(modelKey)}
+        disabled={!isButtonEnabled}
+      >
+        {isLoading ? (
+          <ActivityIndicator size="small" color={isButtonEnabled ? colors.primary.contrast : colors.text.disabled} />
+        ) : (
+          <View style={s.buttonContent}>
+            {!isButtonEnabled && (
+              <Ionicons name="lock-closed" size={13} color={colors.text.disabled} style={{ marginRight: 6 }} />
+            )}
+            <Text style={[s.cardButtonText, !isButtonEnabled && s.cardButtonTextDisabled]}>
+              Reentrenar {label}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+});
 
 export function PerfilConfiguracionTab() {
   const { colors } = useTheme();
@@ -13,40 +176,48 @@ export function PerfilConfiguracionTab() {
   const [reentrenamientoLoading, setReentrenamientoLoading] = useState<ModeloReentrenamiento | null>(null);
   const [reentrenamientoResultado, setReentrenamientoResultado] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchConteos();
-  }, []);
-
-  const fetchConteos = async () => {
+  const fetchConteos = useCallback(async () => {
     setConteosLoading(true);
     setConteosError(false);
     try {
       const data = await reentrenamientoService.getConteos();
       setConteos(data);
-    } catch {
+    } catch (error) {
+      logger.error('Error al cargar conteos de reentrenamiento', error);
       setConteos(null);
       setConteosError(true);
     } finally {
       setConteosLoading(false);
     }
-  };
+  }, []);
 
-  const puedeReentrenar = (modelo: 'polinizacion' | 'germinacion'): boolean => {
+  useEffect(() => {
+    fetchConteos();
+  }, [fetchConteos]);
+
+  const puedeReentrenar = useCallback((modelo: 'polinizacion' | 'germinacion'): boolean => {
     if (!conteos) return false;
     return conteos[modelo] >= conteos.minimo_requerido;
-  };
+  }, [conteos]);
 
-  const botonHabilitado = (modelo: ModeloReentrenamiento): boolean => {
+  const botonHabilitado = useCallback((modelo: ModeloReentrenamiento): boolean => {
     if (reentrenamientoLoading !== null || conteosLoading || !conteos) return false;
     if (modelo === 'ambos') return puedeReentrenar('polinizacion') && puedeReentrenar('germinacion');
     return puedeReentrenar(modelo);
-  };
+  }, [reentrenamientoLoading, conteosLoading, conteos, puedeReentrenar]);
 
-  const handleReentrenar = (modelo: ModeloReentrenamiento) => {
+  const handleReentrenar = useCallback((modelo: unknown) => {
+    // Validar modelo antes de proceder
+    if (!isValidModel(modelo)) {
+      logger.warn('Intento de reentrenamiento con modelo inválido', { modelo });
+      Alert.alert('Error', 'Modelo inválido');
+      return;
+    }
+
     const labels = { polinizacion: 'Polinizacion', germinacion: 'Germinacion', ambos: 'Ambos Modelos' };
     Alert.alert(
       'Reentrenar Modelo',
-      `¿Reentrenar el modelo de ${labels[modelo]}? Esto puede tardar varios minutos.`,
+      `¿Reentrenar el modelo de ${labels[modelo]}? Esto puede tardar 30 minutos. Te mostraremos el progreso.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -56,63 +227,91 @@ export function PerfilConfiguracionTab() {
             setReentrenamientoLoading(modelo);
             setReentrenamientoResultado(null);
             try {
-              const result = await reentrenamientoService.reentrenar(modelo);
-              let msg = '';
-              if (modelo === 'ambos' && result.polinizacion && result.germinacion) {
-                msg = `Polinizacion: R2=${result.polinizacion.r2.toFixed(3)}, MAE=${result.polinizacion.mae.toFixed(1)}d, ${result.polinizacion.registros_usados} registros\nGerminacion: R2=${result.germinacion.r2.toFixed(3)}, MAE=${result.germinacion.mae.toFixed(1)}d, ${result.germinacion.registros_usados} registros`;
-              } else {
-                const r = result as any;
-                msg = `${r.modelo}: R2=${r.r2?.toFixed(3)}, MAE=${r.mae?.toFixed(1)}d, ${r.registros_usados} registros`;
-              }
-              setReentrenamientoResultado(msg);
-              fetchConteos();
+              logger.info(`Iniciando reentrenamiento asíncrono de modelo: ${modelo}`);
+
+              // Iniciar reentrenamiento asíncrono
+              const initResponse = await reentrenamientoService.reentrenar(modelo);
+
+              logger.info(`Reentrenamiento iniciado con task_id: ${initResponse.task_id}`);
+              Alert.alert(
+                'Reentrenamiento Iniciado',
+                `El reentrenamiento ha sido iniciado. Esto puede tardar hasta 30 minutos.\n\nPuedes cerrar esta pantalla, el proceso continuará en segundo plano.`
+              );
+
+              // Poll para obtener el status (en background)
+              reentrenamientoService.pollUntilComplete(
+                initResponse.task_id,
+                (status) => {
+                  logger.info(`Progreso reentrenamiento: ${status.progress}% - ${status.status}`);
+                }
+              ).then((finalStatus) => {
+                if (finalStatus.status === 'SUCCESS' && finalStatus.result) {
+                  const result = finalStatus.result.resultado || finalStatus.result;
+                  let msg = 'Reentrenamiento completado exitosamente';
+
+                  if (Array.isArray(result) || (result && typeof result === 'object')) {
+                    msg += '\n\nLos modelos han sido actualizados correctamente.';
+                  }
+
+                  logger.info(`Reentrenamiento completado: ${modelo}`);
+                  setReentrenamientoResultado(msg);
+                  fetchConteos();
+
+                  // Mostrar alerta de éxito
+                  Alert.alert('✓ Éxito', msg);
+                } else if (finalStatus.status === 'FAILURE') {
+                  const errorMsg = finalStatus.error || 'Error desconocido';
+                  logger.error(`Error en reentrenamiento: ${modelo} - ${errorMsg}`);
+                  Alert.alert('Error', `Reentrenamiento fallido: ${errorMsg}`);
+                }
+                setReentrenamientoLoading(null);
+              }).catch((error) => {
+                logger.error(`Error en polling del reentrenamiento: ${modelo}`, error);
+                Alert.alert('Error', 'Hubo un problema al monitorear el reentrenamiento');
+                setReentrenamientoLoading(null);
+              });
+
             } catch (error: any) {
-              const msg = error.response?.data?.error || error.message || 'Error desconocido';
+              const msg = getErrorMessage(error);
+              logger.error(`Error iniciando reentrenamiento: ${modelo}`, error);
               Alert.alert('Error', msg);
-            } finally {
               setReentrenamientoLoading(null);
             }
           },
         },
       ]
     );
-  };
+  }, [fetchConteos]);
 
-  const minimo = conteos?.minimo_requerido ?? 1000;
+  const minimo = useMemo(() => conteos?.minimo_requerido ?? 1000, [conteos?.minimo_requerido]);
 
-  // Colores del sistema por modulo
-  const polColor = colors.module.polinizacion.primary;
-  const polColorDark = colors.primary.dark;
-  const germColor = colors.module.germinacion.primary;
-  const germColorDark = colors.module.germinacion.icon;
-  const successColor = colors.status.success;
+  // Colores del sistema por modulo - memoizados
+  const colors_memo = useMemo(() => ({
+    polColor: colors.module.polinizacion.primary,
+    polColorDark: colors.primary.dark,
+    germColor: colors.module.germinacion.primary,
+    germColorDark: colors.module.germinacion.icon,
+    successColor: colors.status.success,
+  }), [colors]);
 
-  type ModeloDef = {
-    key: 'polinizacion' | 'germinacion';
-    label: string;
-    badge: string;
-    gradientColors: [string, string];
-    accentColor: string;
-  };
-
-  const modelos: ModeloDef[] = [
+  const modelos = useMemo(() => [
     {
-      key: 'polinizacion',
+      key: 'polinizacion' as const,
       label: 'Polinizacion',
       badge: 'MODELO DE PRODUCCION',
-      gradientColors: [polColorDark, polColor],
-      accentColor: polColor,
+      gradientColors: [colors_memo.polColorDark, colors_memo.polColor] as [string, string],
+      accentColor: colors_memo.polColor,
     },
     {
-      key: 'germinacion',
+      key: 'germinacion' as const,
       label: 'Germinacion',
       badge: 'MODELO DE ANALISIS',
-      gradientColors: [germColorDark, germColor],
-      accentColor: germColor,
+      gradientColors: [colors_memo.germColorDark, colors_memo.germColor] as [string, string],
+      accentColor: colors_memo.germColor,
     },
-  ];
+  ], [colors_memo]);
 
-  const s = createStyles(colors);
+  const s = useMemo(() => createStyles(colors), [colors]);
 
   return (
     <View style={s.container}>
@@ -120,112 +319,35 @@ export function PerfilConfiguracionTab() {
       <Text style={s.subtitle}>
         Los modelos se habilitan automaticamente al alcanzar{' '}
         <Text style={s.subtitleBold}>1,000 registros</Text> en estado{' '}
-        <Text style={[s.subtitleAccent, { color: successColor }]}>Finalizado</Text>.
+        <Text style={[s.subtitleAccent, { color: colors_memo.successColor }]}>Finalizado</Text>.
       </Text>
 
       <View style={s.cardsRow}>
         {modelos.map(({ key, label, badge, gradientColors, accentColor }) => {
           const count = conteos?.[key] ?? 0;
-          const listo = puedeReentrenar(key);
-          const progreso = Math.min((count / minimo) * 100, 100);
+          const isReady = puedeReentrenar(key);
           const isLoading = reentrenamientoLoading === key;
-          const habilitado = botonHabilitado(key);
+          const isButtonEnabled = botonHabilitado(key);
 
           return (
-            <View key={key} style={s.card}>
-              {/* Header */}
-              <LinearGradient colors={gradientColors} style={s.cardHeader}>
-                <View style={s.badgeContainer}>
-                  <Text style={s.badgeText}>{badge}</Text>
-                </View>
-                <View style={s.cardTitleRow}>
-                  {key === 'polinizacion' ? (
-                    <Ionicons name="flower-outline" size={17} color="rgba(255,255,255,0.85)" style={s.cardIcon} />
-                  ) : (
-                    <FontAwesome6 name="seedling" size={15} color="rgba(255,255,255,0.85)" style={s.cardIcon} />
-                  )}
-                  <Text style={s.cardTitle}>{label}</Text>
-                </View>
-              </LinearGradient>
-
-              {/* Cuerpo */}
-              <View style={s.cardBody}>
-                <Text style={s.registrosLabel}>REGISTROS FINALIZADOS</Text>
-
-                <View style={s.countRow}>
-                  {conteosLoading ? (
-                    <ActivityIndicator size="small" color={accentColor} />
-                  ) : conteosError ? (
-                    <Text style={[s.countCurrent, { color: colors.status.error, fontSize: 22 }]}>—</Text>
-                  ) : (
-                    <Text>
-                      <Text style={[s.countCurrent, { color: accentColor }]}>
-                        {count.toLocaleString()}
-                      </Text>
-                      <Text style={s.countTotal}> / {minimo.toLocaleString()}</Text>
-                    </Text>
-                  )}
-                </View>
-
-                {/* Barra de progreso */}
-                <View style={s.progressTrack}>
-                  <View
-                    style={[
-                      s.progressFill,
-                      { width: `${progreso}%` as any, backgroundColor: accentColor },
-                    ]}
-                  />
-                </View>
-                <Text style={[s.progressPct, { color: accentColor }]}>
-                  {!conteosLoading && !conteosError ? `${progreso.toFixed(1)}%` : ''}
-                </Text>
-
-                <View style={s.statusRow}>
-                  {!conteosLoading && !conteosError && (
-                    <Ionicons
-                      name={listo ? 'checkmark-circle' : 'information-circle-outline'}
-                      size={12}
-                      color={listo ? successColor : colors.text.disabled}
-                      style={{ marginRight: 4, marginTop: 1 }}
-                    />
-                  )}
-                  <Text style={[s.statusText, listo && { color: successColor }]}>
-                    {conteosLoading
-                      ? 'Cargando...'
-                      : conteosError
-                      ? 'No se pudo cargar'
-                      : listo
-                      ? 'Listo para reentrenar'
-                      : `Faltan ${(minimo - count).toLocaleString()} registros para habilitar el reentrenamiento`}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Boton */}
-              <TouchableOpacity
-                style={[
-                  s.cardButton,
-                  habilitado
-                    ? { backgroundColor: accentColor, borderColor: accentColor }
-                    : s.cardButtonDisabled,
-                ]}
-                onPress={() => handleReentrenar(key)}
-                disabled={!habilitado}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color={habilitado ? colors.primary.contrast : colors.text.disabled} />
-                ) : (
-                  <View style={s.buttonContent}>
-                    {!habilitado && (
-                      <Ionicons name="lock-closed" size={13} color={colors.text.disabled} style={{ marginRight: 6 }} />
-                    )}
-                    <Text style={[s.cardButtonText, !habilitado && s.cardButtonTextDisabled]}>
-                      Reentrenar {label}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
+            <ModelCard
+              key={key}
+              modelKey={key}
+              label={label}
+              badge={badge}
+              gradientColors={gradientColors}
+              accentColor={accentColor}
+              count={count}
+              minimo={minimo}
+              isReady={isReady}
+              isLoading={isLoading}
+              isButtonEnabled={isButtonEnabled}
+              conteosLoading={conteosLoading}
+              conteosError={conteosError}
+              onReentrenar={handleReentrenar}
+              colors={colors}
+              styles={s}
+            />
           );
         })}
       </View>

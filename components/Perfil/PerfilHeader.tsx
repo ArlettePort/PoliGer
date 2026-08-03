@@ -110,9 +110,9 @@ const createHeaderStyles = (colors: ReturnType<typeof import('@/utils/colors').g
   profileCard: {
     backgroundColor: colors.background.primary,
     borderRadius: isSmallScreen ? 16 : 20,
-    marginHorizontal: isSmallScreen ? 8 : 16,
-    marginTop: 20,
-    marginBottom: 24,
+    marginHorizontal: isSmallScreen ? 4 : 8,
+    marginTop: 6,
+    marginBottom: 8,
     overflow: 'hidden',
     shadowColor: colors.shadow.color,
     shadowOffset: { width: 0, height: 4 },
@@ -123,15 +123,15 @@ const createHeaderStyles = (colors: ReturnType<typeof import('@/utils/colors').g
     borderColor: colors.border.light,
   },
   profileBanner: {
-    height: isSmallScreen ? 60 : 80,
+    height: isSmallScreen ? 40 : 50,
     backgroundColor: colors.accent.primary,
     width: '100%',
   },
   profileContent: {
     backgroundColor: colors.background.primary,
-    paddingTop: isSmallScreen ? 12 : 16,
-    paddingBottom: isSmallScreen ? 16 : 24,
-    paddingHorizontal: isSmallScreen ? 12 : 20,
+    paddingTop: isSmallScreen ? 6 : 8,
+    paddingBottom: isSmallScreen ? 8 : 12,
+    paddingHorizontal: isSmallScreen ? 8 : 12,
   },
   mainLayout: {
     flexDirection: 'row',

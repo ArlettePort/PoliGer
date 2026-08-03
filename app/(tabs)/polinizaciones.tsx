@@ -52,11 +52,12 @@ export default function PolinizacionesScreen() {
   const [form, setForm] = useState(() => getInitialFormState(getUserFullName));
   const [detalle, setDetalle] = useState<Polinizacion | null>(null);
   const [showFiltersSection, setShowFiltersSection] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
   const [tipoRegistro, setTipoRegistro] = useState<'historicos' | 'nuevos' | 'todos'>('todos');
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [dateRange, setDateRange] = useState({ desde: '', hasta: '' });
   const [downloading, setDownloading] = useState(false);
+
+  // isEditMode derivado de form.id en lugar de estado separado
+  const isEditMode = useMemo(() => !!form.id, [form.id]);
 
   // Métricas reales desde el backend
   const [metricas, setMetricas] = useState({ activas: 0, cosechas: 0, tasaExito: 0 });
@@ -78,23 +79,22 @@ export default function PolinizacionesScreen() {
     fetchMetricas();
   }, [fetchMetricas]);
 
-  // Funciones para manejar el formulario
-  const handleSave = async () => {
+  // Funciones para manejar el formulario - memorizadas para optimización
+  const handleSave = useCallback(async () => {
     const success = await hookHandleSave(form, isEditMode);
     if (success) {
       setShowForm(false);
       setForm(getInitialFormState(getUserFullName));
       setPrediccion(null);
-      setIsEditMode(false);
-      refresh(); // Refrescar la lista después de guardar
-      fetchMetricas(); // Refrescar métricas
+      refresh();
+      fetchMetricas();
     }
-  };
+  }, [form, isEditMode, hookHandleSave, getUserFullName, setPrediccion, refresh, fetchMetricas]);
 
-  const handleEdit = (item: any) => {
-    // Mapear los datos de la polinización al formato del formulario
+  const handleEdit = useCallback((item: Polinizacion) => {
+    const initialForm = getInitialFormState(getUserFullName);
     setForm({
-      ...getInitialFormState(getUserFullName),
+      ...initialForm,
       id: item.id || item.numero,
       fecha_polinizacion: item.fechapol,
       fecha_maduracion: item.fechamad || '',
@@ -120,30 +120,28 @@ export default function PolinizacionesScreen() {
       cantidad: item.cantidad || 1,
       cantidad_solicitada: item.cantidad_solicitada?.toString() || '',
       cantidad_disponible: item.cantidad_disponible?.toString() || '',
-      responsable: item.responsable || getUserFullName(),
+      responsable: item.responsable || initialForm.responsable,
       observaciones: item.observaciones || '',
       estado: item.estado || 'INGRESADO',
     });
-    setIsEditMode(true);
     setShowForm(true);
-  };
+  }, [getUserFullName]);
 
-  const handleNew = () => {
+  const handleNew = useCallback(() => {
     setForm(getInitialFormState(getUserFullName));
-    setIsEditMode(false);
     setShowForm(true);
-  };
+  }, [getUserFullName]);
 
-  const handlePrediccionLocal = async () => {
+  const handlePrediccionLocal = useCallback(async () => {
     await hookHandlePrediccion(form);
-  };
+  }, [form, hookHandlePrediccion]);
 
-  const handleSearchChange = (text: string) => {
+  const handleSearchChange = useCallback((text: string) => {
     setFilters({ ...filters, search: text });
-  };
+  }, [filters]);
 
-  const handleTipoRegistroChange = (tipo: 'historicos' | 'nuevos' | 'todos') => {
-    logger.info(' Cambiando tipo de registro:', tipo);
+  const handleTipoRegistroChange = useCallback((tipo: 'historicos' | 'nuevos' | 'todos') => {
+    logger.info('Cambiando tipo de registro:', tipo);
     setTipoRegistro(tipo);
 
     if (tipo === 'todos') {
@@ -155,42 +153,35 @@ export default function PolinizacionesScreen() {
         tipo_registro: tipo
       });
     }
-  };
+  }, [filters]);
 
-  const handleApplyFilters = (newFilters: PolinizacionFilterParams) => {
+  const handleApplyFilters = useCallback((newFilters: PolinizacionFilterParams) => {
     setFilters(newFilters);
-  };
+  }, []);
 
-  const handleDownloadPDF = async () => {
-    if (!fechaDesde || !fechaHasta) {
+  const handleDownloadPDF = useCallback(async () => {
+    if (!dateRange.desde || !dateRange.hasta) {
       showToast('Debes seleccionar las fechas "Desde" y "Hasta" antes de descargar el PDF', 'error');
       return;
     }
     try {
       setDownloading(true);
 
-      // Preparar filtros
-      const filtros: any = {};
+      const filtros: Record<string, string> = {
+        fecha_inicio: dateRange.desde,
+        fecha_fin: dateRange.hasta,
+      };
 
-      if (fechaDesde) {
-        filtros.fecha_inicio = fechaDesde;
-      }
-
-      if (fechaHasta) {
-        filtros.fecha_fin = fechaHasta;
-      }
-
-      // Llamar al servicio de reportes
       await reportesService.generarReportePolinizaciones('pdf', filtros);
-
       showToast('PDF descargado exitosamente', 'success');
-    } catch (error) {
-      logger.error('Error descargando PDF:', error);
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+      logger.error('Error descargando PDF:', errorMsg);
       showToast('Error al descargar el PDF', 'error');
     } finally {
       setDownloading(false);
     }
-  };
+  }, [dateRange, showToast]);
 
   const styles = useMemo(() => createStyles(themeColors), [themeColors]);
 
@@ -223,14 +214,14 @@ export default function PolinizacionesScreen() {
           search={filters.search || ''}
           activeFiltersCount={activeFiltersCount}
           tipoRegistro={tipoRegistro}
-          fechaDesde={fechaDesde}
-          fechaHasta={fechaHasta}
+          fechaDesde={dateRange.desde}
+          fechaHasta={dateRange.hasta}
           downloading={downloading}
           onSearchChange={handleSearchChange}
           onClearSearch={() => setFilters({ ...filters, search: '' })}
           onShowFilters={() => setShowFiltersSection(!showFiltersSection)}
-          onFechaDesdeChange={setFechaDesde}
-          onFechaHastaChange={setFechaHasta}
+          onFechaDesdeChange={(fecha) => setDateRange({ ...dateRange, desde: fecha })}
+          onFechaHastaChange={(fecha) => setDateRange({ ...dateRange, hasta: fecha })}
           onTipoRegistroChange={handleTipoRegistroChange}
           onDownloadPDF={handleDownloadPDF}
           onRefresh={refresh}
@@ -295,9 +286,9 @@ const createStyles = (colors: ReturnType<typeof import('@/utils/colors').getColo
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   loadingContainer: {
     flex: 1,
@@ -310,80 +301,5 @@ const createStyles = (colors: ReturnType<typeof import('@/utils/colors').getColo
     fontSize: 16,
     color: colors.text.tertiary,
     fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.background.modal,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: colors.background.primary,
-    borderRadius: 16,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-    shadowColor: colors.shadow.color,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  filtersModalContent: {
-    backgroundColor: colors.background.primary,
-    borderRadius: 20,
-    width: '90%',
-    maxWidth: 600,
-    maxHeight: '85%',
-    shadowColor: colors.shadow.color,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 12,
-    overflow: 'hidden',
-  },
-  detalleTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.accent.primary,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  detalleContent: {
-    maxHeight: 400,
-  },
-  detalleRow: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
-  },
-  detalleLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text.secondary,
-    width: 120,
-    marginRight: 12,
-  },
-  detalleValue: {
-    fontSize: 14,
-    color: colors.text.tertiary,
-    flex: 1,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  modalButton: {
-    backgroundColor: colors.accent.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  modalButtonText: {
-    color: colors.text.inverse,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
