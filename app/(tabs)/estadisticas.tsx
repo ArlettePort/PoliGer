@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ScrollView, View, Text, StyleSheet, ActivityIndicator, RefreshControl, useWindowDimensions, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, ActivityIndicator, RefreshControl, useWindowDimensions, Alert, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import axios from 'axios';
 import { API_BASE_URL } from '@/config/api.config';
 import { ResponsiveLayout } from '@/components/layout';
+import { LineChart } from 'react-native-chart-kit';
 
 interface ModeloStats {
   modelo: string;
@@ -59,6 +60,10 @@ export default function EstadisticasScreen() {
   const [modeloGerminacion, setModeloGerminacion] = useState<ModeloStats | null>(null);
   const [registrosStats, setRegistrosStats] = useState<RegistrosStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [historicoPol, setHistoricoPol] = useState<any[]>([]);
+  const [historicoGerm, setHistoricoGerm] = useState<any[]>([]);
+  const [alertas, setAlertas] = useState<any[]>([]);
+  const [mostrarHistorico, setMostrarHistorico] = useState(false);
 
   useEffect(() => {
     if (!canViewEstadisticas) {
@@ -96,6 +101,26 @@ export default function EstadisticasScreen() {
         { headers }
       );
       setRegistrosStats(resReg.data);
+
+      // Cargar histórico
+      const resHistPol = await axios.get(
+        `${API_BASE_URL}/estadisticas/historico_metricas/?modelo=polinizacion&dias=30`,
+        { headers }
+      );
+      setHistoricoPol(resHistPol.data.historico || []);
+
+      const resHistGerm = await axios.get(
+        `${API_BASE_URL}/estadisticas/historico_metricas/?modelo=germinacion&dias=30`,
+        { headers }
+      );
+      setHistoricoGerm(resHistGerm.data.historico || []);
+
+      // Cargar alertas
+      const resAlertas = await axios.get(
+        `${API_BASE_URL}/estadisticas/alertas_activas/`,
+        { headers }
+      );
+      setAlertas(resAlertas.data.alertas || []);
     } catch (err: any) {
       console.error('Error cargando estadísticas:', err);
       setError(err.response?.data?.error || 'Error cargando estadísticas');
@@ -108,6 +133,29 @@ export default function EstadisticasScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     cargarEstadisticas();
+  };
+
+  const descargarPDF = async () => {
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const response = await axios.get(
+        `${API_BASE_URL}/estadisticas/exportar_pdf/`,
+        { headers, responseType: 'blob' }
+      );
+
+      // Crear URL para descargar
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `estadisticas_${new Date().toISOString().split('T')[0]}.html`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+
+      Alert.alert('Éxito', 'Reporte descargado correctamente');
+    } catch (err: any) {
+      Alert.alert('Error', 'No se pudo descargar el reporte');
+    }
   };
 
   if (loading) {
@@ -133,6 +181,121 @@ export default function EstadisticasScreen() {
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle" size={24} color="#ff6b6b" />
             <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
+        {/* Alertas Activas */}
+        {alertas.length > 0 && (
+          <View style={[styles.section, { backgroundColor: '#ffe0e0', borderRadius: 12, borderLeftColor: '#ff6b6b', borderLeftWidth: 4 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Ionicons name="warning" size={24} color="#ff6b6b" />
+              <Text style={[styles.sectionTitle, { marginLeft: 12, color: '#c92a2a' }]}>
+                ⚠️ {alertas.length} Alerta{alertas.length !== 1 ? 's' : ''} Activa{alertas.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            {alertas.slice(0, 3).map((alerta: any) => (
+              <View key={alerta.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottomColor: '#ffcccc', borderBottomWidth: 1 }}>
+                <Text style={{ fontWeight: '600', color: '#c92a2a' }}>{alerta.tipo}</Text>
+                <Text style={{ fontSize: 12, color: '#a61e4d', marginTop: 4 }}>{alerta.descripcion}</Text>
+                {alerta.valor_actual !== null && (
+                  <Text style={{ fontSize: 11, color: '#7f1640', marginTop: 2 }}>
+                    Valor: {alerta.valor_actual.toFixed(1)} (Umbral: {alerta.valor_umbral})
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Botones de Acción */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.button, { flex: 1, marginRight: 8 }]}
+            onPress={() => setMostrarHistorico(!mostrarHistorico)}
+          >
+            <Ionicons name="chart-line" size={20} color={themeColors.primary} />
+            <Text style={{ color: themeColors.primary, fontWeight: '600', marginLeft: 8 }}>
+              Histórico
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { flex: 1 }]}
+            onPress={descargarPDF}
+          >
+            <Ionicons name="download" size={20} color={themeColors.primary} />
+            <Text style={{ color: themeColors.primary, fontWeight: '600', marginLeft: 8 }}>
+              PDF
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Gráficos de Tendencias */}
+        {mostrarHistorico && historicoPol.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tendencia Polinización (30 días)</Text>
+            <View style={{ alignItems: 'center', marginVertical: 16 }}>
+              <LineChart
+                data={{
+                  labels: historicoPol.slice(-7).map(h => new Date(h.fecha).getDate().toString()),
+                  datasets: [
+                    {
+                      data: historicoPol.slice(-7).map(h => h.confianza_promedio),
+                      strokeWidth: 2,
+                    }
+                  ]
+                }}
+                width={Dimensions.get('window').width - 40}
+                height={220}
+                chartConfig={{
+                  backgroundColor: themeColors.cardBackground,
+                  backgroundGradientFrom: themeColors.cardBackground,
+                  backgroundGradientTo: themeColors.cardBackground,
+                  color: () => themeColors.primary,
+                  labelColor: () => themeColors.textSecondary,
+                  style: { borderRadius: 8 },
+                  propsForDots: {
+                    r: '4',
+                    strokeWidth: '2',
+                    stroke: themeColors.primary,
+                  },
+                }}
+              />
+            </View>
+          </View>
+        )}
+
+        {mostrarHistorico && historicoGerm.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tendencia Germinación (30 días)</Text>
+            <View style={{ alignItems: 'center', marginVertical: 16 }}>
+              <LineChart
+                data={{
+                  labels: historicoGerm.slice(-7).map(h => new Date(h.fecha).getDate().toString()),
+                  datasets: [
+                    {
+                      data: historicoGerm.slice(-7).map(h => h.confianza_promedio),
+                      strokeWidth: 2,
+                    }
+                  ]
+                }}
+                width={Dimensions.get('window').width - 40}
+                height={220}
+                chartConfig={{
+                  backgroundColor: themeColors.cardBackground,
+                  backgroundGradientFrom: themeColors.cardBackground,
+                  backgroundGradientTo: themeColors.cardBackground,
+                  color: () => themeColors.primary,
+                  labelColor: () => themeColors.textSecondary,
+                  style: { borderRadius: 8 },
+                  propsForDots: {
+                    r: '4',
+                    strokeWidth: '2',
+                    stroke: themeColors.primary,
+                  },
+                }}
+              />
+            </View>
           </View>
         )}
 
@@ -405,6 +568,21 @@ function createStyles(colors: any, isMobile: boolean) {
     footerText: {
       color: colors.textTertiary,
       fontSize: 12,
+    },
+    actionButtons: {
+      flexDirection: 'row',
+      marginBottom: 24,
+      gap: 8,
+    },
+    button: {
+      flexDirection: 'row',
+      backgroundColor: colors.cardBackground,
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderColor: colors.borderColor,
+      borderWidth: 1,
     },
   });
 }
