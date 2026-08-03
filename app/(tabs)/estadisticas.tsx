@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
-import { API_BASE_URL } from '@/config/api.config';
+import { API_CONFIG } from '@/config/api';
 import { ResponsiveLayout } from '@/components/layout';
 import { LineChart } from 'react-native-chart-kit';
 
@@ -83,41 +83,41 @@ export default function EstadisticasScreen() {
 
       // Cargar estadísticas de polinización
       const resPol = await axios.get(
-        `${API_BASE_URL}/estadisticas/modelo_polinizacion/`,
+        `${API_CONFIG.BASE_URL}/estadisticas/modelo_polinizacion/`,
         { headers }
       );
       setModeloPolinizacion(resPol.data);
 
       // Cargar estadísticas de germinación
       const resGerm = await axios.get(
-        `${API_BASE_URL}/estadisticas/modelo_germinacion/`,
+        `${API_CONFIG.BASE_URL}/estadisticas/modelo_germinacion/`,
         { headers }
       );
       setModeloGerminacion(resGerm.data);
 
       // Cargar estadísticas de registros
       const resReg = await axios.get(
-        `${API_BASE_URL}/estadisticas/registros_sistema/`,
+        `${API_CONFIG.BASE_URL}/estadisticas/registros_sistema/`,
         { headers }
       );
       setRegistrosStats(resReg.data);
 
       // Cargar histórico
       const resHistPol = await axios.get(
-        `${API_BASE_URL}/estadisticas/historico_metricas/?modelo=polinizacion&dias=30`,
+        `${API_CONFIG.BASE_URL}/estadisticas/historico_metricas/?modelo=polinizacion&dias=30`,
         { headers }
       );
       setHistoricoPol(resHistPol.data.historico || []);
 
       const resHistGerm = await axios.get(
-        `${API_BASE_URL}/estadisticas/historico_metricas/?modelo=germinacion&dias=30`,
+        `${API_CONFIG.BASE_URL}/estadisticas/historico_metricas/?modelo=germinacion&dias=30`,
         { headers }
       );
       setHistoricoGerm(resHistGerm.data.historico || []);
 
       // Cargar alertas
       const resAlertas = await axios.get(
-        `${API_BASE_URL}/estadisticas/alertas_activas/`,
+        `${API_CONFIG.BASE_URL}/estadisticas/alertas_activas/`,
         { headers }
       );
       setAlertas(resAlertas.data.alertas || []);
@@ -139,7 +139,7 @@ export default function EstadisticasScreen() {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const response = await axios.get(
-        `${API_BASE_URL}/estadisticas/exportar_pdf/`,
+        `${API_CONFIG.BASE_URL}/estadisticas/exportar_pdf/`,
         { headers, responseType: 'blob' }
       );
 
