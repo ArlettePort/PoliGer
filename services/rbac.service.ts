@@ -266,6 +266,15 @@ class RBACService {
   }
 
   /**
+   * Verifica si el usuario puede ver estadísticas del sistema
+   * Solo para TIPO_1 (Senior Tech) y TIPO_4 (System Manager)
+   */
+  canViewEstadisticas(permissions: UserPermissions | null): boolean {
+    if (!permissions || !permissions.rol) return false;
+    return ['TIPO_1', 'TIPO_4'].includes(permissions.rol);
+  }
+
+  /**
    * Obtiene las tabs disponibles según los permisos del usuario
    */
   getAvailableTabs(permissions: UserPermissions | null): string[] {
@@ -285,6 +294,10 @@ class RBACService {
 
     if (this.canViewReportes(permissions)) {
       availableTabs.push('reportes');
+    }
+
+    if (this.canViewEstadisticas(permissions)) {
+      availableTabs.push('estadisticas');
     }
 
     // Tab de perfil siempre disponible

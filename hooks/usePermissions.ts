@@ -94,6 +94,13 @@ export const usePermissions = () => {
   }, [permissions]);
 
   /**
+   * Verifica si el usuario puede ver estadísticas del sistema
+   */
+  const canViewEstadisticas = useCallback((): boolean => {
+    return rbacService.canViewEstadisticas(permissions);
+  }, [permissions]);
+
+  /**
    * Obtiene las tabs disponibles según los permisos del usuario
    */
   const getAvailableTabs = useCallback(() => {
@@ -144,6 +151,7 @@ export const usePermissions = () => {
     canExportData,
     isAdmin,
     canViewGlobalStats,
+    canViewEstadisticas,
     
     // Utilidades
     getAvailableTabs,
