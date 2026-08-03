@@ -23,7 +23,7 @@ export const CONFIG = {
   // URLs específicas - TODOS LOS ENDPOINTS DISPONIBLES
   ENDPOINTS: {
     // Autenticación
-    LOGIN: '/login/',
+    LOGIN: '/token/',
     PROTECTED: '/protected/',
     TOKEN_REFRESH: '/token/refresh/',
     HEALTH: '/health/',
